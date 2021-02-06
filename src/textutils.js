@@ -7,10 +7,10 @@
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,124 +21,156 @@
  *
  */
 
+const CHAR_CODES = {
+  QUESTION_MARK: 63,
+  SPACE: 32,
+  NEWLINE: 10
+};
 
-function fontMetrics( font, pixel_size, more_line_gap = 0.0 ) {
-    // We use separate scale for the low case characters
-    // so that x-height fits the pixel grid.
-    // Other characters use cap-height to fit to the pixels
-    var cap_scale   = pixel_size / font.cap_height;
-    var low_scale   = Math.round( font.x_height * cap_scale ) / font.x_height;
-    
-    // Ascent should be a whole number since it's used to calculate the baseline
-    // position which should lie at the pixel boundary
-    var ascent      = Math.round( font.ascent * cap_scale );
-    
-    // Same for the line height
-    var line_height = Math.round( cap_scale * ( font.ascent + font.descent + font.line_gap ) + more_line_gap );
-    
-    return { cap_scale   : cap_scale,
-             low_scale   : low_scale,
-             pixel_size  : pixel_size,
-             ascent      : ascent,
-             line_height : line_height
-           };
+/* The font generator tool outputs the font metrics as an array. The following indices are used: */
+const CHAR_METRICS = {
+  LEFT: 0,
+  TOP: 1,
+  RIGHT: 2,
+  BOTTOM: 3,
+  BEARING_X: 4,
+  BEARING_Y: 5,
+  ADVANCE_X: 6,
+  FLAGS: 7
+};
+
+function fontMetrics (font, pixelSize, moreLineGap = 0.0) {
+  // We use separate scale for the low case characters
+  // so that x-height fits the pixel grid.
+  // Other characters use the ascend (metrics from the json export are already normalized to ascend = 1) to fit to the pixels
+  const capScale = Math.round(pixelSize);
+  const lowScale = Math.round(font.xHeight * capScale) / font.xHeight;
+
+  const lineHeight = pixelSize * (1 - font.descent + font.lineGap + moreLineGap);
+
+  /* All font metrics are expressed in terms of the ascent (normalized to ascent = 1).
+  To achieve the same for values in terms of texture pixels we have to apply the following factor.
+  This is because the glyph height from the font generation tool corresponds to the ascent + abs(descent) = 1 - descent. */
+  const scaleTexturePxToMetrics = (1 - font.descent) / font.glyphHeight;
+
+  return {
+    capScale: capScale,
+    lowScale: lowScale,
+    pixelSize: pixelSize,
+    lineHeight: lineHeight,
+    scaleTexturePxToMetrics: scaleTexturePxToMetrics
+  };
 }
 
+function charRect (pos, font, fontMetrics, charMetrics, kern = 0.0) {
+  // Low case characters have first bit set in 'flags'
+  const lowcase = (charMetrics[CHAR_METRICS.FLAGS] & 1) === 1;
 
-function charRect( pos, font, font_metrics, font_char, kern = 0.0 ) {
-    // Low case characters have first bit set in 'flags'
-    var lowcase = ( font_char.flags & 1 ) == 1;
+  /* Pen position is at the top of the line, Y goes up. Baseline is the ascent (1 * pixelSize)
+  below the top of the line. Round to integral pixels for hinting. */
+  const baseline = Math.round(pos[1] - fontMetrics.pixelSize);
 
-    // Pen position is at the top of the line, Y goes up
-    var baseline = pos[1] - font_metrics.ascent;
+  /* Low case chars use their own scale. Scale is applied to stretch the glyphs a bit in y-direction
+  in order to fit the pixel grid for hinting.
+  In horizontal direction no rounding is used (i.e. the scale is simply pixelSize)
+  because scaling shall not affect the global text width. */
+  const scaleY = lowcase ? fontMetrics.lowScale : fontMetrics.capScale;
+  const scaleX = fontMetrics.pixelSize;
 
-    // Low case chars use their own scale
-    var scale = lowcase ? font_metrics.low_scale : font_metrics.cap_scale;
+  // Laying out the glyph rectangle
+  const gLeft = charMetrics[CHAR_METRICS.LEFT];
+  const gTop = charMetrics[CHAR_METRICS.TOP];
+  const gRight = charMetrics[CHAR_METRICS.RIGHT];
+  const gBottom = charMetrics[CHAR_METRICS.BOTTOM];
 
-    // Laying out the glyph rectangle
-    var g      = font_char.rect;
-    var bottom = baseline - scale * ( font.descent + font.iy );
-    var top    = bottom   + scale * ( font.row_height );
-    var left   = pos[0]   + font.aspect * scale * ( font_char.bearing_x + kern - font.ix );
-    var right  = left     + font.aspect * scale * ( g[2] - g[0] );
-    var p = [ left, top, right, bottom ];    
+  const falloff = font.falloff * fontMetrics.scaleTexturePxToMetrics;
+  const top = baseline + scaleY * (charMetrics[CHAR_METRICS.BEARING_Y] + falloff);
+  const left = pos[0] + scaleX * (charMetrics[CHAR_METRICS.BEARING_X] - falloff + kern);
+  const bottom = top - scaleY * fontMetrics.scaleTexturePxToMetrics * (gBottom - gTop);
+  const right = left + scaleX * fontMetrics.scaleTexturePxToMetrics * (gRight - gLeft);
+  const p = [left, top, right, bottom];
 
-    // Advancing pen position
-    var new_pos_x = pos[0] + font.aspect * scale * ( font_char.advance_x );
+  // Advancing pen position
+  const newPosX = pos[0] + scaleX * (charMetrics[CHAR_METRICS.ADVANCE_X] + kern);
 
-    // Signed distance field size in screen pixels
-    var sdf_size  = 2.0 * font.iy * scale;
+  // Signed distance field size in screen pixels
+  const sdfSize = 2.0 * falloff * fontMetrics.pixelSize;
 
-    var vertices = [
-        p[0], p[1],  g[0], g[1],  sdf_size,
-        p[2], p[1],  g[2], g[1],  sdf_size,
-        p[0], p[3],  g[0], g[3],  sdf_size,
+  /* Convert from texture pixels to texture coordinates. */
+  const gLeftTexture = gLeft / font.textureWidth;
+  const gTopTexture = gTop / font.textureHeight;
+  const gRightTexture = gRight / font.textureWidth;
+  const gBottomTexture = gBottom / font.textureHeight;
 
-        p[0], p[3],  g[0], g[3],  sdf_size,
-        p[2], p[1],  g[2], g[1],  sdf_size,
-        p[2], p[3],  g[2], g[3],  sdf_size ];
+  const vertices = [
+    p[0], p[1], gLeftTexture, gTopTexture, sdfSize,
+    p[2], p[1], gRightTexture, gTopTexture, sdfSize,
+    p[0], p[3], gLeftTexture, gBottomTexture, sdfSize,
 
-    return { vertices : vertices, pos : [ new_pos_x, pos[1] ] };
+    p[0], p[3], gLeftTexture, gBottomTexture, sdfSize,
+    p[2], p[1], gRightTexture, gTopTexture, sdfSize,
+    p[2], p[3], gRightTexture, gBottomTexture, sdfSize];
+
+  return { vertices: vertices, pos: [newPosX, pos[1]] };
 }
 
+function writeString (string, font, fontMetrics, pos, vertexArray, strPos = 0, arrayPos = 0) {
+  let prevCharCode = null; // Used to calculate kerning
+  let cpos = pos; // Current pen position
+  let xMax = 0.0; // Max width - used for bounding box
 
+  for (;;) {
+    if (strPos === string.length) break;
+    const glyphFloatCount = 6 * 5; // two rectangles, 5 floats per vertex
+    if (arrayPos + glyphFloatCount >= vertexArray.length) break;
 
-function writeString( string, font, font_metrics, pos, vertex_array, str_pos = 0, array_pos = 0 ) {
-    var prev_char = " ";  // Used to calculate kerning
-    var cpos      = pos;  // Current pen position
-    var x_max     = 0.0;  // Max width - used for bounding box
-    var scale     = font_metrics.cap_scale;
-    
-    for(;;) {
-        if ( str_pos == string.length ) break;
-        var glyph_float_count = 6 * 5; // two rectangles, 5 floats per vertex
-        if ( array_pos + glyph_float_count >= vertex_array.length ) break;
-        
-        var schar = string[ str_pos ];
-        str_pos++;
-        
-        if ( schar == "\n" ) {
-            if ( cpos[0] > x_max ) x_max = cpos[0]; // Expanding the bounding rect
-            cpos[0]  = pos[0];                      
-            cpos[1] -= font_metrics.line_height;
-            prev_char = " ";
-            continue;
-        }
+    let currentCharCode = string.charCodeAt(strPos);
+    strPos++;
 
-        if ( schar == " " ) {
-            cpos[0] += font.space_advance * scale; 
-            prev_char = " ";
-            continue;
-        }
-
-        var font_char = font.chars[ schar ];
-        if ( !font_char ) {                         // Substituting unavailable characters with '?'
-            schar = "?";
-            font_char = font.chars[ "?" ];
-        }
-
-        var kern = font.kern[ prev_char + schar ];
-        if ( !kern ) kern = 0.0;
-        
-        // calculating the glyph rectangle and copying it to the vertex array
-        
-        var rect = charRect( cpos, font, font_metrics, font_char, kern );
-        
-        for ( var i = 0; i < rect.vertices.length; ++i ) {
-            vertex_array[ array_pos ] = rect.vertices[i];
-            array_pos++;
-        }
-
-        prev_char = schar;
-        cpos = rect.pos;
-    }
-    
-    var res = {
-        rect : [ pos[0], pos[1], x_max - pos[0], pos[1] - cpos[1] + font_metrics.line_height ],
-        string_pos : str_pos,
-        array_pos : array_pos
+    if (currentCharCode === CHAR_CODES.NEWLINE) {
+      if (cpos[0] > xMax) xMax = cpos[0]; // Expanding the bounding rect
+      cpos[0] = pos[0];
+      cpos[1] -= fontMetrics.lineHeight;
+      prevCharCode = null;
+      continue;
     }
 
-    return res;
-}
+    if (currentCharCode === CHAR_CODES.SPACE) {
+      cpos[0] += font.advanceXSpace * fontMetrics.pixelSize;
+      prevCharCode = null;
+      continue;
+    }
 
+    let charMetrics = font.chars[currentCharCode];
+    if (!charMetrics) { // Substituting unavailable characters with '?'
+      currentCharCode = CHAR_CODES.QUESTION_MARK;
+      charMetrics = font.chars[currentCharCode];
+    }
+
+    let kern;
+    if (prevCharCode !== null && prevCharCode in font.kerning && currentCharCode in font.kerning[prevCharCode]) {
+      kern = font.kerning[prevCharCode][currentCharCode];
+    } else {
+      kern = 0;
+    }
+
+    // calculating the glyph rectangle and copying it to the vertex array
+    const rect = charRect(cpos, font, fontMetrics, charMetrics, kern);
+
+    for (let i = 0; i < rect.vertices.length; ++i) {
+      vertexArray[arrayPos] = rect.vertices[i];
+      arrayPos++;
+    }
+
+    prevCharCode = currentCharCode;
+    cpos = rect.pos;
+  }
+
+  const res = {
+    rect: [pos[0], pos[1], xMax - pos[0], pos[1] - cpos[1] + fontMetrics.lineHeight],
+    string_pos: strPos,
+    array_pos: arrayPos
+  };
+
+  return res;
+}

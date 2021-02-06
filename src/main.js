@@ -7,10 +7,10 @@
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,43 +21,46 @@
  *
  */
 
+/* global loadTexture, initAttribs, createProgram, vertCode, fragCode, colorFromString, fontMetrics, writeString, bindAttribs, requestAnimationFrame */
 
-var do_update = true;
+import arimoFont from './fonts/arimo.js';
+import robotoFont from './fonts/roboto.js';
 
-function update_text() {
-    do_update = true;
+let doUpdate = true;
+
+function updateText () {
+  doUpdate = true;
 }
 
-function glMain() {
+export function glMain () {
+  // Initializing input widgets
 
-    // Initializing input widgets
+  const fontsSelect = document.getElementById('fonts');
+  fontsSelect.addEventListener('input', updateText, false);
+  fontsSelect.onchange = updateText;
 
-    var fonts_select = document.getElementById("fonts");
-    fonts_select.addEventListener('input', update_text, false);
-    fonts_select.onchange = update_text;
+  const fontSizeInput = document.getElementById('font_size');
+  fontSizeInput.addEventListener('input', updateText, false);
+  fontSizeInput.onchange = updateText;
 
-    var font_size_input = document.getElementById("font_size");
-    font_size_input.addEventListener('input', update_text, false);
-    font_size_input.onchange = update_text;
+  const fontHintingInput = document.getElementById('font_hinting');
+  fontHintingInput.addEventListener('input', updateText, false);
+  fontHintingInput.onchange = updateText;
 
-    var font_hinting_input = document.getElementById("font_hinting");
-    font_hinting_input.addEventListener('input', update_text, false);
-    font_hinting_input.onchange = update_text;
+  const subpixelInput = document.getElementById('subpixel');
+  subpixelInput.addEventListener('input', updateText, false);
+  subpixelInput.onchange = updateText;
 
-    var subpixel_input = document.getElementById("subpixel");
-    subpixel_input.addEventListener('input', update_text, false);
-    subpixel_input.onchange = update_text;
+  const fontColorInput = document.getElementById('font_color');
+  fontColorInput.addEventListener('input', updateText, false);
+  fontColorInput.onchange = updateText;
 
-    var font_color_input = document.getElementById("font_color");
-    font_color_input.addEventListener('input', update_text, false);
-    font_color_input.onchange = update_text;
+  const bgColorInput = document.getElementById('background_color');
+  bgColorInput.addEventListener('input', updateText, false);
+  bgColorInput.onchange = updateText;
 
-    var bg_color_input = document.getElementById("background_color");
-    bg_color_input.addEventListener('input', update_text, false);
-    bg_color_input.onchange = update_text;
-
-    var textarea = document.getElementById("text");
-    textarea.value = `To be, or not to be--that is the question:
+  const textarea = document.getElementById('text');
+  textarea.value = `To be, or not to be--that is the question:
 Whether 'tis nobler in the mind to suffer
 The slings and arrows of outrageous fortune
 Or to take arms against a sea of troubles
@@ -70,163 +73,158 @@ To sleep--perchance to dream: ay, there's the rub,
 For in that sleep of death what dreams may come
 When we have shuffled off this mortal coil,
 Must give us pause. There's the respect
-That makes calamity of so long life.`    
-    textarea.addEventListener('input', update_text, false);
-    textarea.onchange = update_text;
+That makes calamity of so long life.`;
+  textarea.addEventListener('input', updateText, false);
+  textarea.onchange = updateText;
 
-    var all_fonts = {
-        "roboto"        : roboto_font,
-        "roboto_bold"   : roboto_bold_font,        
-        "ubuntu"        : ubuntu_font,
-        "ubuntu_bold"   : ubuntu_bold_font,
-        "dejavu"        : dejavu_font,
-        "dejavu_italic" : dejavu_italic_font   
-    }    
+  const allFonts = {
+    arimo: arimoFont,
+    roboto: robotoFont
+  };
 
-    // GL stuff
-    
-    var canvas = document.getElementById('glcanvas');
-    var gl = canvas.getContext('experimental-webgl', { premultipliedAlpha: false,  alpha: false  } );
-    
-    // Loading SDF font images. Resulting textures should NOT be mipmapped!
-    
-    roboto_font.tex        = loadTexture( gl, "fonts/roboto.png", gl.LUMINANCE, false );
-    roboto_bold_font.tex   = loadTexture( gl, "fonts/roboto-bold.png", gl.LUMINANCE, false );    
-    ubuntu_font.tex        = loadTexture( gl, "fonts/ubuntu.png", gl.LUMINANCE, false, true );
-    ubuntu_bold_font.tex   = loadTexture( gl, "fonts/ubuntu-bold.png", gl.LUMINANCE, false );
-    dejavu_font.tex        = loadTexture( gl, "fonts/dejavu-serif.png", gl.LUMINANCE, false );
-    dejavu_italic_font.tex = loadTexture( gl, "fonts/dejavu-serif-italic.png", gl.LUMINANCE, false );        
+  // GL stuff
 
-    // Vertex attributes
-    
-    var attribs = [
-        { loc: 0, name : 'pos',      size: 2 }, // Vertex position
-        { loc: 1, name : 'tex0',     size: 2 }, // Texture coordinate
-        { loc: 2, name : 'sdf_size', size: 1 }  // Glyph SDF distance in screen pixels
-    ];
-    initAttribs( gl, attribs );
+  const canvas = document.getElementById('glcanvas');
+  const gl = canvas.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: false });
 
-    // 10000 ought to be enough for anybody
-    
-    var vertex_array = new Float32Array( 10000 * 6 * attribs[0].stride / 4 );
-    
-    var vertex_buffer = gl.createBuffer();
-    gl.bindBuffer( gl.ARRAY_BUFFER, vertex_buffer );
-    gl.bufferData( gl.ARRAY_BUFFER, vertex_array, gl.DYNAMIC_DRAW );
-    gl.bindBuffer( gl.ARRAY_BUFFER, null );
+  // Loading SDF font images. Resulting textures should NOT be mipmapped!
+  arimoFont.tex = loadTexture(gl, 'fonts/arimo.png', gl.LUMINANCE, false);
+  robotoFont.tex = loadTexture(gl, 'fonts/roboto.png', gl.LUMINANCE, false);
 
-    var prog = createProgram( gl, vertCode, fragCode, attribs );
+  // Vertex attributes
 
-    var str_res;     // Result of a writeString function.
-                     // Contains text bounding rectangle.
-    
-    var vcount = 0;  // Text string vertex count
-    var tex;         // Font texture
-    
-    var font_hinting = 1.0;
-    var subpixel     = 1.0;
+  const attribs = [
+    { loc: 0, name: 'pos', size: 2 }, // Vertex position
+    { loc: 1, name: 'tex0', size: 2 }, // Texture coordinate
+    { loc: 2, name: 'sdf_size', size: 1 } // Glyph SDF distance in screen pixels
+  ];
+  initAttribs(gl, attribs);
 
-    var font_color = [ 0.1, 0.1, 0.1 ];
-    var bg_color   = [ 0.9, 0.9, 0.9 ];
+  // 10000 ought to be enough for anybody
 
-    var canvas_width = canvas.clientWidth;
-    var canvas_height = canvas.clientHeight;
-    var pixel_ratio = window.devicePixelRatio || 1;
+  const vertexArray = new Float32Array(10000 * 6 * attribs[0].stride / 4);
 
-    function render() {
+  const vertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertexArray, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-        if ( do_update ) {
+  const prog = createProgram(gl, vertCode, fragCode, attribs);
 
-            font_color = colorFromString( font_color_input.value, [ 0.1, 0.1, 0.1 ] );
-            bg_color   = colorFromString( bg_color_input.value,   [ 0.9, 0.9, 0.9 ] );
-            
-            var font = all_fonts[ fonts_select.value ];
-            if ( !font ) {
-                font = roboto_font;
-            }
-            tex = font.tex;
+  let strRes; // Result of a writeString function.
+  // Contains text bounding rectangle.
 
-            var font_size = Math.round( font_size_input.value * pixel_ratio );
-            var fmetrics = fontMetrics( font, font_size, font_size * 0.2 );
-            
-            // Laying out the text
-            str_res = writeString( textarea.value, font, fmetrics, [0,0], vertex_array );
-            vcount = str_res.array_pos / ( attribs[0].stride / 4 /*size of float*/ );
+  let vcount = 0; // Text string vertex count
+  let tex; // Font texture
 
-            gl.bindBuffer( gl.ARRAY_BUFFER, vertex_buffer );
-            gl.bufferSubData( gl.ARRAY_BUFFER, 0, vertex_array );
-            gl.bindBuffer( gl.ARRAY_BUFFER, null );
+  let fontHinting = 1.0;
+  let subpixel = 1.0;
+  let isBgr = false;
+  let isVertical = false;
 
-            font_hinting = font_hinting_input.checked ? 1.0 : 0.0;
-            subpixel = subpixel_input.checked ? 1.0 : 0.0;
-            
-            do_update = false;
-        }        
+  let fontColor = [0.1, 0.1, 0.1];
+  let bgColor = [0.9, 0.9, 0.9];
 
-        // Setting canvas size considering display DPI
+  const canvasWidth = canvas.clientWidth;
+  const canvasHeight = canvas.clientHeight;
+  let pixelRatio = window.devicePixelRatio || 1;
 
-        var new_pixel_ratio = window.devicePixelRatio || 1;
+  function render () {
+    if (doUpdate) {
+      fontColor = colorFromString(fontColorInput.value, [0.1, 0.1, 0.1]);
+      bgColor = colorFromString(bgColorInput.value, [0.9, 0.9, 0.9]);
 
-        if ( pixel_ratio != new_pixel_ratio ) {
-            do_update = true;
-            pixel_ratio = new_pixel_ratio;
-        }
-        
-        var cw = Math.round( pixel_ratio * canvas_width * 0.5 ) * 2.0;
-        var ch = Math.round( pixel_ratio * canvas_height * 0.5 ) * 2.0;
+      let font = allFonts[fontsSelect.value];
+      if (!font) {
+        font = robotoFont;
+      }
+      tex = font.tex;
 
-        canvas.width = cw;
-        canvas.height = ch;
+      const fontSize = Math.round(fontSizeInput.value * pixelRatio);
+      const fmetrics = fontMetrics(font, fontSize, 0.2);
 
-        canvas.style.width  = ( cw / pixel_ratio ) + "px";
-        canvas.style.height = ( ch / pixel_ratio ) + "px";
+      // Laying out the text
+      strRes = writeString(textarea.value, font, fmetrics, [0, 0], vertexArray);
+      vcount = strRes.array_pos / (attribs[0].stride / 4 /* size of float */);
 
-        // Centering the text rectangle
-        
-        var dx = Math.round( -0.5 * str_res.rect[2] );
-        var dy = Math.round(  0.5 * str_res.rect[3] );
+      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertexArray);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-        var ws = 2.0 / cw;
-        var hs = 2.0 / ch;
+      fontHinting = fontHintingInput.checked ? 1.0 : 0.0;
+      subpixel = subpixelInput.value !== 'off' ? 1.0 : 0.0;
+      isBgr = subpixelInput.value === 'bgr_horizontal' || subpixelInput.value === 'bgr_vertical';
+      isVertical = subpixelInput.value === 'rgb_vertical' || subpixelInput.value === 'bgr_vertical';
 
-        // Transformation matrix. 3x3 ortho.
-        // Canvas size, [0,0] is at the text rect's top left corner, Y goes up.        
-        
-        var screen_mat = new Float32Array([
-            ws,       0,         0,
-            0,        hs,        0,
-            dx * ws,  dy * hs,   1
-        ]);
-
-        // Clearing the canvas
-        
-        gl.clearColor( bg_color[0], bg_color[1], bg_color[2], 0.0 );
-        gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT );
-        gl.viewport( 0, 0, canvas.width, canvas.height );
-
-        // Setting up our shader values and rendering
-        // a vcount of vertices from the vertex_buffer
-        
-        gl.useProgram( prog.id );
-
-        prog.font_tex.set( 0 );
-        prog.sdf_tex_size.set( tex.image.width, tex.image.height );
-        prog.transform.setv( screen_mat );
-        prog.hint_amount.set( font_hinting );
-        prog.subpixel_amount.set( subpixel );
-        prog.bg_color.setv( bg_color );
-        prog.font_color.setv( font_color );
-        
-        gl.activeTexture( gl.TEXTURE0 );
-        gl.bindTexture( gl.TEXTURE_2D, tex.id );
-        
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer);
-        bindAttribs( gl, attribs );
-
-        gl.drawArrays(gl.TRIANGLES, 0, vcount);
-        
-        requestAnimationFrame( render );   
+      doUpdate = false;
     }
 
-    requestAnimationFrame( render );
+    // Setting canvas size considering display DPI
+
+    const newPixelRatio = window.devicePixelRatio || 1;
+
+    if (pixelRatio !== newPixelRatio) {
+      doUpdate = true;
+      pixelRatio = newPixelRatio;
+    }
+
+    const cw = Math.round(pixelRatio * canvasWidth * 0.5) * 2.0;
+    const ch = Math.round(pixelRatio * canvasHeight * 0.5) * 2.0;
+
+    canvas.width = cw;
+    canvas.height = ch;
+
+    canvas.style.width = (cw / pixelRatio) + 'px';
+    canvas.style.height = (ch / pixelRatio) + 'px';
+
+    // Centering the text rectangle
+
+    const dx = Math.round(-0.5 * strRes.rect[2]);
+    const dy = Math.round(0.5 * strRes.rect[3]);
+
+    const ws = 2.0 / cw;
+    const hs = 2.0 / ch;
+
+    // Transformation matrix. 3x3 ortho.
+    // Canvas size, [0,0] is at the text rect's top left corner, Y goes up.
+
+    const screenMat = new Float32Array([
+      ws, 0, 0,
+      0, hs, 0,
+      dx * ws, dy * hs, 1
+    ]);
+
+    // Clearing the canvas
+
+    gl.clearColor(bgColor[0], bgColor[1], bgColor[2], 0.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+
+    // Setting up our shader values and rendering
+    // a vcount of vertices from the vertex_buffer
+
+    gl.useProgram(prog.id);
+
+    prog.font_tex.set(0);
+    prog.sdf_tex_size.set(tex.image.width, tex.image.height);
+    prog.transform.setv(screenMat);
+    prog.hint_amount.set(fontHinting);
+    prog.subpixel_amount.set(subpixel);
+    prog.is_bgr.set(isBgr);
+    prog.is_vertical.set(isVertical);
+    prog.bg_color.setv(bgColor);
+    prog.font_color.setv(fontColor);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex.id);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    bindAttribs(gl, attribs);
+
+    gl.drawArrays(gl.TRIANGLES, 0, vcount);
+
+    requestAnimationFrame(render);
+  }
+
+  requestAnimationFrame(render);
 }

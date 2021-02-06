@@ -1,0 +1,7 @@
+{
+    "editor.tabSize": 2,
+    "debug.javascript.usePreview": false,
+    "files.associations": {
+        "iostream": "cpp"
+    } /* Temporary workaround  needed for the debugger to work with vscode version 1.47.2. */
+}

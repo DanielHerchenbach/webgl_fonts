@@ -17,11 +17,7 @@
             <td>Font</td>
             <td><select id="fonts">
                 <option value="roboto">Roboto</option>
-                <option value="roboto_bold">Roboto Bold</option>
-                <option value="ubuntu">Ubuntu</option>
-                <option value="ubuntu_bold">Ubuntu Bold</option>
-                <option value="dejavu">DejaVu Serif</option>
-                <option value="dejavu_italic">DejaVu Serif Italic</option>                
+                <option value="arimo">Arimo</option>           
             </select></td>
           </tr>
           <tr>
@@ -34,7 +30,13 @@
           </tr>
           <tr>
             <td>Subpixel rendering</td>
-            <td><input id = "subpixel" type = "checkbox" checked="checked"></input></td>
+            <td><select id="subpixel">
+                <option value="off">Off</option>
+                <option value="rgb_horizontal" selected>RGB horizontal</option>
+                <option value="rgb_vertical">RGB vertical</option>
+                <option value="bgr_horizontal">BGR horizontal</option>
+                <option value="bgr_vertical">BGR vertical</option>    
+            </select></td>
           </tr>
           <tr>
             <td>Font color</td>
@@ -48,19 +50,12 @@
       </div>
       <div><textarea cols="80" rows="20" id = "text"></textarea></div>
     </div>
-    <script src="fonts/roboto.js"></script>
-    <script src="fonts/roboto-bold.js"></script>
-    <script src="fonts/dejavu-serif.js"></script>
-    <script src="fonts/dejavu-serif-italic.js"></script>
-    <script src="fonts/ubuntu.js"></script>
-    <script src="fonts/ubuntu-bold.js"></script>
-    
     <script src="glutils.js"></script>
     <script src="textutils.js"></script>    
     <script src="vshader.js"></script>
-    <script src="fshader.js"></script>
-    <script src="main.js"></script>
-    <script>
+    <script src="fshader.js"></script>    
+    <script type="module">
+      import { glMain } from "./main.js"
       glMain();
     </script>
   </body>
