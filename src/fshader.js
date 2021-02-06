@@ -30,9 +30,6 @@ uniform float subpixel_amount;
 uniform bool is_bgr;
 uniform bool is_vertical;
 
-uniform vec3 bg_color;
-uniform vec3 font_color;
-
 varying vec2  tc0;
 varying float doffset;
 varying vec2  sdf_texel;
@@ -143,9 +140,6 @@ void main() {
     
     vec3 channels = estimateSubpixelCoverage( grad, alpha, subpixel_amount, is_bgr, is_vertical );
 
-    // For subpixel rendering we have to blend each color channel separately
-    vec3 res = mix( bg_color, font_color, channels );
-    
-    gl_FragColor = vec4( res, 1.0 );
+    gl_FragColor = vec4( channels, alpha );
 }
 `;

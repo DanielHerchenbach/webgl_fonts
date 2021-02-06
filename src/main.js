@@ -200,6 +200,12 @@ That makes calamity of so long life.`;
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.viewport(0, 0, canvas.width, canvas.height);
 
+    /* The output of the fragment shader (source color) is not an actual color but individual subpixel opacities (alpha_r, alpha_g, alpha_b, alpha_a).
+    The following blend function will mix the color in the frame buffer with the (constant) font color according to these opacities. */
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.CONSTANT_COLOR, gl.ONE_MINUS_SRC_COLOR);
+    gl.blendColor(fontColor[0], fontColor[1], fontColor[2], 1.0);
+
     // Setting up our shader values and rendering
     // a vcount of vertices from the vertex_buffer
 
@@ -212,8 +218,6 @@ That makes calamity of so long life.`;
     prog.subpixel_amount.set(subpixel);
     prog.is_bgr.set(isBgr);
     prog.is_vertical.set(isVertical);
-    prog.bg_color.setv(bgColor);
-    prog.font_color.setv(fontColor);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex.id);
